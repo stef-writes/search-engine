@@ -66,7 +66,7 @@ function exportIndexedData() {
                 
                 sitesProcessed++;
                 
-                // If all sites are processed, write the file
+                // If all sites are processed, write the ile
                 if (sitesProcessed === totalSites) {
                     const filename = 'search_engine_data.csv';
                     fs.writeFile(filename, csvContent, (err) => {

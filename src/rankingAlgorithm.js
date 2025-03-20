@@ -12,14 +12,14 @@ function rankResults(index, query, searchResults) {
             let pages = index.get(keyword) || new Set();
 
             if (pages.has(url)) {
-                score += 10; // Base score for keyword match
+                score += 10; 
             }
         }
 
         // Fetch content (title, headings, body) from the indexed page
         for (let [keyword, urls] of index.entries()) {
             if (urls.has(url)) {
-                pageContent += " " + keyword; // Simulating full text of the page
+                pageContent += " " + keyword; 
             }
         }
 
@@ -32,18 +32,18 @@ function rankResults(index, query, searchResults) {
             score += keywordCount * 2; // Weight keyword frequency higher
         }
 
-        // Prioritize title & headings if present
+        // Prioritize title & headings 
         if (url.toLowerCase().includes(query.toLowerCase())) {
-            score += 20; // Title contains the keyword
+            score += 20; 
         }
 
         scores.set(url, score);
     }
 
-    // Sort results by score (higher score first)
+    // Sort results
     return Array.from(scores.entries())
-        .sort((a, b) => b[1] - a[1]) // Sort by score in descending order
-        .map(entry => entry[0]); // Return only the URLs
+        .sort((a, b) => b[1] - a[1]) 
+        .map(entry => entry[0]); 
 }
 
 module.exports = { rankResults };
