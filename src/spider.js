@@ -1,7 +1,8 @@
 const http = require('http');
 const https = require('https');
-const { JSDOM } = require('jsdom');
+const cheerio = require('cheerio');
 const { addPageToIndex } = require('./searchIndex');
+const { URL } = require('url');
 
 // fetch html
 function fetchPage(url) {
@@ -22,38 +23,52 @@ function fetchPage(url) {
     });
 }
 
-// extract content
+// extract content using cheerio
 function getAllContent(url, html) {
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
+    const $ = cheerio.load(html);
     
     return {
         url,
-        title: document.title || "No title found",
-        headings: extractHeadings(document),
-        paragraphs: extractParagraphs(document),
-        links: extractLinks(document, url)
+        title: $('title').text().trim() || "No title found",
+        headings: extractHeadings($),
+        paragraphs: extractParagraphs($),
+        links: extractLinks($, url)
     };
 }
 
-function extractHeadings(document) {
-    return [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')].map(h => h.textContent.trim());
+function extractHeadings($) {
+    const headings = [];
+    $('h1, h2, h3, h4, h5, h6').each((i, elem) => {
+        headings.push($(elem).text().trim());
+    });
+    return headings;
 }
 
-function extractParagraphs(document) {
-    return [...document.querySelectorAll('p')].map(p => p.textContent.trim());
+function extractParagraphs($) {
+    const paragraphs = [];
+    $('p').each((i, elem) => {
+        paragraphs.push($(elem).text().trim());
+    });
+    return paragraphs;
 }
 
-function extractLinks(document, baseUrl) {
-    return [...document.querySelectorAll('a')]
-        .filter(a => a.href)
-        .map(a => {
-            const href = new URL(a.href, baseUrl).href;
-            return {
-                href,
-                text: a.textContent.trim() || "[No Text]"
-            };
-        });
+function extractLinks($, baseUrl) {
+    const links = [];
+    $('a').each((i, elem) => {
+        const href = $(elem).attr('href');
+        if (href) {
+            try {
+                const fullUrl = new URL(href, baseUrl).href;
+                links.push({
+                    href: fullUrl,
+                    text: $(elem).text().trim() || "[No Text]"
+                });
+            } catch (error) {
+                // Skip invalid URLs
+            }
+        }
+    });
+    return links;
 }
 
 async function analyzePage(url) {
@@ -64,18 +79,16 @@ async function analyzePage(url) {
         const pageData = getAllContent(url, html);
         return pageData;
     } catch (error) {
-        console.error(error);
+        console.error(`Error analyzing ${url}: ${error}`);
         return null;
     }
 }
-
 
 async function analyzePages(urls) {
     if (typeof urls === 'string') urls = [urls];
     const results = await Promise.all(urls.map(analyzePage));
     return results.filter(result => result !== null);
 }
-
 
 async function crawl(urls, index) {
     if (typeof urls === 'string') urls = [urls];
@@ -90,11 +103,11 @@ async function crawl(urls, index) {
                 
                 if (pageData) {
                     // Combine all text content for indexing
-                    const content = [
-                        pageData.title,
-                        ...pageData.headings,
-                        ...pageData.paragraphs
-                    ].join(' ');
+                    const content = {
+                        title: pageData.title,
+                        headings: pageData.headings,
+                        paragraphs: pageData.paragraphs
+                    };
                     
                     addPageToIndex(index, url, content);
                     console.log('Indexed: ' + url);

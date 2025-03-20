@@ -16,14 +16,14 @@ function rankResults(index, query, searchResults) {
             }
         }
 
-        // Fetch content (title, headings, body) from the indexed page
+        // Fetch content from indexed page
         for (let [keyword, urls] of index.entries()) {
             if (urls.has(url)) {
                 pageContent += " " + keyword; 
             }
         }
 
-        // Count keyword frequency in the page content
+        // Count keyword frequency
         for (let keyword of keywords) {
             const regex = new RegExp(`\\b${keyword}\\b`, "gi");
             const matches = pageContent.match(regex);
@@ -40,7 +40,7 @@ function rankResults(index, query, searchResults) {
         scores.set(url, score);
     }
 
-    // Sort results
+    // Sort 
     return Array.from(scores.entries())
         .sort((a, b) => b[1] - a[1]) 
         .map(entry => entry[0]); 

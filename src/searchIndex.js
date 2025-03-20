@@ -99,7 +99,7 @@ function extractKeywords(content) {
 
 // Updated stop words list to be more comprehensive but not too restrictive
 const stopWords = new Set([
-    'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have',
+    'are','such','some','the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have',
     'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do',
     'at', 'this', 'but', 'his', 'by', 'from', 'they', 'we',
     'say', 'her', 'or', 'an', 'will', 'my', 'one', 'all', 'would',

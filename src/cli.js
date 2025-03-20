@@ -5,7 +5,6 @@ const { search } = require('./searchAlgorithm');
 const { rankResults } = require('./rankingAlgorithm');
 const { analyzePages } = require('./spider');
 
-// Create tools we need
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -14,93 +13,92 @@ const rl = readline.createInterface({
 const index = createIndex();
 const indexedUrls = new Set();
 
-// Show menu options to the user
+// Show menu 
 function showMenu() {
     console.log('\n=== Search Engine Menu ===');
     console.log('1. Add website(s)');
     console.log('2. Search');
     console.log('3. Remove a website');
     console.log('4. View indexed sites');
-    console.log('5. Export data to file');
-    console.log('6. Exit');
+    console.log('5. Exit');
     
-    rl.question('What would you like to do? (1-6): ', handleChoice);
+    rl.question('What would you like to do? (1-5): ', handleChoice);
 }
 
-function exportIndexedData() {
-    if (indexedUrls.size === 0) {
-        console.log('No sites have been indexed yet.');
-        showMenu();
-        return;
+function exportSiteData(url, siteData) {
+    try {
+        // Get keywords for this URL from the index
+        const keywords = Array.from(index.entries())
+            .filter(([keyword, urls]) => urls.has(url))
+            .map(([keyword]) => keyword)
+            .slice(0, 10);
+
+        // Create CSV content for single site
+        const csvHeader = 'URL,Title,Subpages,External Links,Total Headings,Paragraphs,Top Keywords\n';
+        const subpages = siteData.links.filter(link => link.href.includes(new URL(url).hostname)).length;
+        const externalLinks = siteData.links.length - subpages;
+        
+        const csvRow = [
+            url,
+            (siteData.title || '').replace(/,/g, ' '),
+            subpages,
+            externalLinks,
+            siteData.headings.length,
+            siteData.paragraphs.length,
+            keywords.join(' | ')
+        ].join(',');
+
+        const csvContent = csvHeader + csvRow;
+        const filename = `site_data_${new URL(url).hostname.replace(/\./g, '_')}.csv`;
+
+        fs.writeFile(filename, csvContent, (err) => {
+            if (err) {
+                console.log('Error saving file: ' + err.message);
+            } else {
+                console.log('Data exported to: ' + filename);
+            }
+            showSiteOptions(url, siteData);
+        });
+    } catch (error) {
+        console.log('Error exporting data: ' + error.message);
+        showSiteOptions(url, siteData);
     }
+}
 
-    // Create CSV header
-    let csvContent = 'URL,Title,Number of Headings,Number of Paragraphs,Number of Links,Top Keywords\n';
-    let sitesProcessed = 0;
-    const totalSites = indexedUrls.size;
-    
-    // Process each URL
-    indexedUrls.forEach(url => {
-        analyzePages(url)
-            .then(pageData => {
-                if (pageData) {
-                    // Get keywords for this URL
-                    const keywords = Array.from(index.entries())
-                        .filter(([keyword, urls]) => urls.has(url))
-                        .map(([keyword]) => keyword)
-                        .slice(0, 5)
-                        .join(' | ');
+function showSiteOptions(url, siteData) {
+    console.log('\nSite Options:');
+    console.log('1. View hyperlinks');
+    console.log('2. Export site data');
+    console.log('3. Remove this site');
+    console.log('4. Return to menu');
 
-                    // Create CSV row
-                    const row = [
-                        url,
-                        (pageData.title || '').replace(/,/g, ' '),
-                        pageData.headings.length,
-                        pageData.paragraphs.length,
-                        pageData.links.length,
-                        keywords
-                    ].join(',');
-
-                    csvContent += row + '\n';
-                }
-                
-                sitesProcessed++;
-                
-                // If all sites are processed, write the ile
-                if (sitesProcessed === totalSites) {
-                    const filename = 'search_engine_data.csv';
-                    fs.writeFile(filename, csvContent, (err) => {
-                        if (err) {
-                            console.log('Error saving file: ' + err.message);
-                        } else {
-                            console.log('Data exported to: ' + filename);
-                        }
-                        showMenu();
-                    });
-                }
-            })
-            .catch(error => {
-                console.log('Error processing ' + url + ': ' + error.message);
-                sitesProcessed++;
-                if (sitesProcessed === totalSites) {
-                    showMenu();
-                }
-            });
+    rl.question('Choose an option (1-4): ', (choice) => {
+        if (choice === '1') {
+            viewAndAddHyperlinks(url);
+        } else if (choice === '2') {
+            exportSiteData(url, siteData);
+        } else if (choice === '3') {
+            removePageFromIndex(index, url);
+            indexedUrls.delete(url);
+            console.log('Site removed from index.');
+            showMenu();
+        } else {
+            showMenu();
+        }
     });
 }
 
 function viewSiteDetails(url) {
     console.log('\nAnalyzing site: ' + url);
-    let siteData; // Declare variable in outer scope
     
     analyzePages(url)
         .then(pageData => {
             if (pageData && pageData[0]) {
-                siteData = pageData[0];
+                const siteData = pageData[0];
                 console.log('\n=== Site Overview ===');
                 console.log('Title: ' + siteData.title);
                 
-                // Count unique subpages (links that are part of the same domain)
+                // Count unique subpages 
                 const subpages = siteData.links
                     .filter(link => link.href.includes(new URL(url).hostname))
                     .length;
@@ -130,48 +128,7 @@ function viewSiteDetails(url) {
                     console.log('  No keywords found');
                 }
 
-                // Show options
-                console.log('\nOptions:');
-                console.log('1. Export site data as CSV');
-                console.log('2. Return to menu');
-                console.log('3. Remove this site');
-                
-                rl.question('Choose an option (1-3): ', (choice) => {
-                    if (choice === '1' && siteData) {
-                        // Create CSV content for single site
-                        const csvHeader = 'URL,Title,Subpages,External Links,Total Headings,Paragraphs,Top Keywords\n';
-                        const csvRow = [
-                            url,
-                            (siteData.title || '').replace(/,/g, ' '),
-                            subpages,
-                            externalLinks,
-                            siteData.headings.length,
-                            siteData.paragraphs.length,
-                            keywords.join(' | ')
-                        ].join(',');
-
-                        const csvContent = csvHeader + csvRow;
-                        const filename = `site_data_${new URL(url).hostname.replace(/\./g, '_')}.csv`;
-
-                        fs.writeFile(filename, csvContent, (err) => {
-                            if (err) {
-                                console.log('Error saving file: ' + err.message);
-                            } else {
-                                console.log('Data exported to: ' + filename);
-                            }
-                            showMenu();
-                        });
-                    }
-                    else if (choice === '3') {
-                        removePageFromIndex(index, url);
-                        indexedUrls.delete(url);
-                        console.log('Site removed from index.');
-                        showMenu();
-                    }
-                    else {
-                        showMenu();
-                    }
-                });
+                showSiteOptions(url, siteData);
             } else {
                 console.log('Error: Could not fetch site details');
                 showMenu();
@@ -183,9 +140,78 @@ function viewSiteDetails(url) {
         });
 }
 
+// Function to view and optionally add hyperlinks
+async function viewAndAddHyperlinks(url) {
+    try {
+        console.log('\nAnalyzing site for hyperlinks:', url);
+        const results = await analyzePages(url);
+        
+        if (results && results[0] && results[0].links) {
+            const links = results[0].links;
+            console.log(`\nFound ${links.length} hyperlinks:`);
+            
+            // Display links with numbers
+            links.forEach((link, index) => {
+                console.log(`${index + 1}. ${link.text} (${link.href})`);
+            });
+            
+            // Ask if user wants to add any links
+            console.log('\nOptions:');
+            console.log('1. Add specific links to index');
+            console.log('2. Add all links to index');
+            console.log('3. Return to menu');
+            
+            rl.question('Choose an option (1-3): ', async (choice) => {
+                if (choice === '1') {
+                    rl.question('Enter link numbers to add (comma-separated, e.g., 1,3,5): ', async (numbers) => {
+                        const selectedIndices = numbers.split(',').map(n => parseInt(n.trim()) - 1);
+                        const selectedUrls = selectedIndices
+                            .filter(i => i >= 0 && i < links.length)
+                            .map(i => links[i].href);
+                        
+                        console.log('\nAdding selected links to index...');
+                        for (const url of selectedUrls) {
+                            indexedUrls.add(url);
+                        }
+                        const results = await analyzePages(selectedUrls);
+                        results.forEach(pageData => {
+                            if (pageData) {
+                                addPageToIndex(index, pageData.url, pageData);
+                                console.log('Added:', pageData.url);
+                            }
+                        });
+                        showMenu();
+                    });
+                } else if (choice === '2') {
+                    console.log('\nAdding all links to index...');
+                    const urls = links.map(link => link.href);
+                    for (const url of urls) {
+                        indexedUrls.add(url);
+                    }
+                    const results = await analyzePages(urls);
+                    results.forEach(pageData => {
+                        if (pageData) {
+                            addPageToIndex(index, pageData.url, pageData);
+                            console.log('Added:', pageData.url);
+                        }
+                    });
+                    showMenu();
+                } else {
+                    showMenu();
+                }
+            });
+        } else {
+            console.log('No hyperlinks found or error analyzing page');
+            showMenu();
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showMenu();
+    }
+}
+
 // Function to handle user input
 function handleChoice(choice) {
-    // Convert choice to string for comparison
     choice = String(choice).trim();
 
     if (choice === '1') {
@@ -204,23 +230,12 @@ function handleChoice(choice) {
             analyzePages(urls).then(pagesData => {
                 pagesData.forEach(pageData => {
                     if (pageData) {
-                        // Pass the structured data directly for better keyword extraction
                         addPageToIndex(index, pageData.url, pageData);
-                        
-                        // Debug log to show extracted keywords
-                        const keywords = Array.from(index.entries())
-                            .filter(([keyword, urls]) => urls.has(pageData.url))
-                            .map(([keyword]) => keyword)
-                            .slice(0, 10);
                         console.log('\nIndexed:', pageData.url);
                         console.log('Title:', pageData.title);
-                        console.log('Top 10 keywords (weighted by importance):');
-                        keywords.forEach((keyword, i) => {
-                            console.log(`  ${i + 1}. ${keyword}`);
-                        });
                     }
                 });
-                console.log('\nWebsites added! (Please wait a few seconds before searching)');
+                console.log('\nWebsites added!');
                 showMenu();
             }).catch(error => {
                 console.log('Error adding websites: ' + error);
@@ -236,21 +251,12 @@ function handleChoice(choice) {
                 return;
             }
 
-            // Debug log to show search process
-            console.log('\nSearching for:', searchTerm);
-            const keywords = extractKeywords(searchTerm);
-            console.log('Extracted search keywords:', keywords);
-
             const results = search(index, searchTerm);
             const rankedResults = rankResults(index, searchTerm, results);
 
             console.log('\nSearch Results:');
             if (rankedResults.length === 0) {
                 console.log('No results found');
-                // Debug information
-                console.log('\nDebug Info:');
-                console.log('Total indexed URLs:', indexedUrls.size);
-                console.log('Total indexed keywords:', index.size);
             } else {
                 rankedResults.forEach((url, i) => {
                     console.log((i + 1) + '. ' + url);
@@ -298,35 +304,23 @@ function handleChoice(choice) {
             console.log((i + 1) + '. ' + url);
         });
 
-        console.log('\nOptions:');
-        console.log('1. View site details');
-        console.log('2. Return to menu');
-
-        rl.question('Choose an option (1-2): ', (choice) => {
-            if (choice === '1') {
-                rl.question('Enter site number: ', (siteChoice) => {
-                    const index = parseInt(siteChoice) - 1;
-                    if (index >= 0 && index < sites.length) {
-                        viewSiteDetails(sites[index]);
-                        return;
-                    }
-                    showMenu();
-                });
+        rl.question('\nEnter site number to view details: ', (siteChoice) => {
+            const siteIndex = parseInt(siteChoice) - 1;
+            if (siteIndex >= 0 && siteIndex < sites.length) {
+                viewSiteDetails(sites[siteIndex]);
             } else {
+                console.log('Invalid site number');
                 showMenu();
             }
         });
     }
     else if (choice === '5') {
-        exportIndexedData();
-    }
-    else if (choice === '6') {
         console.log('Thanks for using the Search Engine. Goodbye!');
         rl.close();
         return;
     }
     else {
-        console.log('Please enter a number between 1 and 6');
+        console.log('Please enter a number between 1 and 5');
         showMenu();
     }
 }
